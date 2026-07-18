@@ -21,6 +21,7 @@ import AuthGate from './screens/AuthGate'
 import AccountSettings from './screens/AccountSettings'
 import Settings from './screens/Settings'
 import Achievements from './screens/Achievements'
+import World from './screens/World'
 import { PACKS, rollStarterTier, openPack } from './data/packs'
 import { getCard, TIER_LABELS, TIER_COLORS } from './data/cards'
 import { trainingCost, TRAINING_XP_GAIN } from './data/leveling'
@@ -71,6 +72,11 @@ export default function App() {
   const [accountStatus, setAccountStatus] = useState(authMode === 'account' ? 'loading' : 'idle')
   const [showBackupPrompt, setShowBackupPrompt] = useState(false)
   const [showLoginPrompt, setShowLoginPrompt] = useState(false)
+  // Pause-style menu that floats over the 3D world for anything that
+  // doesn't have (or doesn't deserve) a physical landmark to walk to —
+  // Achievements, Settings, Account, plus a couple of duplicate shortcuts
+  // to landmarked screens for players who'd rather tap than walk.
+  const [worldMenuOpen, setWorldMenuOpen] = useState(false)
   // The save row's version on the server, as far as we know — sent with
   // every PUT so the server can detect "someone else (another tab, another
   // device) saved since I last loaded" instead of silently overwriting it
@@ -578,114 +584,147 @@ export default function App() {
         <p className="app-subtitle">a small story about small moments</p>
       </header>
 
-      {screen.view === 'hub' && (
-        <div className="select-grid">
-          {dailyBonusBanner && (
-            <div className="daily-bonus-banner">
-              <span>
-                🎉 Welcome back! +{dailyBonusBanner.gold} gold
-                {dailyBonusBanner.companionName ? ` and a little extra closeness with ${dailyBonusBanner.companionName}.` : '.'}
-              </span>
-              <button onClick={() => setDailyBonusBanner(null)}>Dismiss</button>
-            </div>
-          )}
+      {screen.view === 'hub' && (() => {
+        const c = save.recruitedCompanionId ? getCharacter(save.recruitedCompanionId) : null
+        const chatReady = c && save.unlockedChat[c.id]
+        const info = c ? activeChapterInfo(STORY_CHAPTERS[c.id], save, c.id) : null
+        const affection = c ? save.affection[c.id] || 0 : 0
 
-          {save.dailyQuests && (
-            <div className="daily-quests-card">
-              <h3>Today's quests</h3>
-              <ul className="daily-quests-list">
-                <li className={save.dailyQuests.chatDone ? 'daily-quest-done' : ''}>
-                  {save.dailyQuests.chatDone ? '✅' : '☐'} Chat with your companion
-                </li>
-                <li className={save.dailyQuests.trainDone ? 'daily-quest-done' : ''}>
-                  {save.dailyQuests.trainDone ? '✅' : '☐'} Train a card
-                </li>
-                <li className={save.dailyQuests.battleWon ? 'daily-quest-done' : ''}>
-                  {save.dailyQuests.battleWon ? '✅' : '☐'} Win a battle
-                </li>
-              </ul>
-              {save.dailyQuests.claimed ? (
-                <p className="daily-quests-claimed">Reward claimed for today ✓</p>
-              ) : (
-                <button
-                  className="daily-quests-claim"
-                  disabled={!(save.dailyQuests.chatDone && save.dailyQuests.trainDone && save.dailyQuests.battleWon)}
-                  onClick={() => {
-                    const result = claimDailyQuests(save, save.recruitedCompanionId)
-                    if (result.claimed) setSave(result.state)
-                  }}
-                >
-                  Claim reward (+{DAILY_QUEST_GOLD} gold{save.recruitedCompanionId ? ', +3 affection' : ''})
-                </button>
-              )}
-            </div>
-          )}
-
-          {save.recruitedCompanionId && (() => {
-            const c = getCharacter(save.recruitedCompanionId)
-            const affection = save.affection[c.id] || 0
-            const chatReady = save.unlockedChat[c.id]
-            const chapters = STORY_CHAPTERS[c.id]
-            const info = activeChapterInfo(chapters, save, c.id)
-            const stage = relationshipStage(affection)
-            return (
-              <div className="character-card" style={{ borderColor: c.color }}>
-                <div className="character-avatar" style={{ background: c.color }}>
-                  {c.image ? <img src={c.image} alt={c.name} /> : c.name[0]}
-                </div>
-                <h2 style={{ color: c.color }}>{c.name}</h2>
-                <p className="character-tagline">{c.tagline}</p>
-                <p className="affection-meter">♥ {affection} · {stage}</p>
-                <div className="character-actions">
-                  <button onClick={() => setScreen({ view: 'story', characterId: c.id })}>
-                    {info.mode === 'first' && 'Continue story'}
-                    {info.mode === 'new' && `💌 New moment: ${info.chapter.title}`}
-                    {info.mode === 'replay' && 'Replay story'}
-                  </button>
-                  {chatReady && (
-                    <button onClick={() => setScreen({ view: 'chat', characterId: c.id })}>Chat</button>
+        return (
+          <>
+            <World
+              companionId={save.recruitedCompanionId}
+              onOpenMenu={() => setWorldMenuOpen(true)}
+              onEnterZone={(action) => {
+                if (action === 'companion') {
+                  // Walking up to your companion's spot either drops you
+                  // straight into whichever story beat is next, or — once
+                  // that's caught up and chat has unlocked — asks which of
+                  // the two you're here for (same choice the old hub
+                  // buttons offered).
+                  if (chatReady && info.mode === 'replay') setWorldMenuOpen('companionChoice')
+                  else setScreen({ view: 'story', characterId: c.id })
+                } else {
+                  setScreen({ view: action })
+                }
+              }}
+              hud={
+                <div className="world-hud-card">
+                  {c && (
+                    <>
+                      <div className="world-hud-avatar" style={{ background: c.color }}>
+                        {c.image ? <img src={c.image} alt={c.name} /> : c.name[0]}
+                      </div>
+                      <span>{c.name} · ♥ {affection}</span>
+                    </>
                   )}
+                  <span className="world-hud-gold">🪙 {save.gold}</span>
+                </div>
+              }
+            />
+
+            {dailyBonusBanner && (
+              <div className="daily-bonus-banner world-toast">
+                <span>
+                  🎉 Welcome back! +{dailyBonusBanner.gold} gold
+                  {dailyBonusBanner.companionName ? ` and a little extra closeness with ${dailyBonusBanner.companionName}.` : '.'}
+                </span>
+                <button onClick={() => setDailyBonusBanner(null)}>Dismiss</button>
+              </div>
+            )}
+
+            {worldMenuOpen === 'companionChoice' && c && (
+              <div className="world-menu-overlay" onClick={() => setWorldMenuOpen(false)}>
+                <div className="world-menu-panel" onClick={(e) => e.stopPropagation()}>
+                  <h2 style={{ color: c.color }}>{c.name}</h2>
+                  <div className="character-actions">
+                    <button onClick={() => { setWorldMenuOpen(false); setScreen({ view: 'story', characterId: c.id }) }}>
+                      Replay story
+                    </button>
+                    <button onClick={() => { setWorldMenuOpen(false); setScreen({ view: 'chat', characterId: c.id }) }}>
+                      Chat
+                    </button>
+                  </div>
                 </div>
               </div>
-            )
-          })()}
-
-          <div className="character-card hub-menu-card">
-            <p className="pack-gold">Gold: {save.gold}</p>
-            <div className="character-actions">
-              <button onClick={() => setScreen({ view: 'packs' })}>Open Packs</button>
-              <button onClick={() => setScreen({ view: 'collection' })}>Collection</button>
-              <button onClick={() => setScreen({ view: 'partySelect' })}>Explore (Battle)</button>
-              <button onClick={() => setScreen({ view: 'humanRecruit' })}>Meet Travelers</button>
-              <button onClick={() => setScreen({ view: 'achievements' })}>Achievements</button>
-              <button onClick={() => setScreen({ view: 'settings' })}>Settings</button>
-              {authMode === 'account' && (
-                <button onClick={() => setScreen({ view: 'account' })}>Account</button>
-              )}
-            </div>
-            {authMode === 'account' && (
-              <p className={`hub-sync-status hub-sync-status-${syncStatus}`}>
-                {syncStatus === 'syncing' && 'Syncing…'}
-                {syncStatus === 'synced' && 'Synced ✓'}
-                {syncStatus === 'error' && 'Sync failed — will retry'}
-                {syncStatus === 'offline' && 'Offline — saved locally, will sync automatically'}
-                {syncStatus === 'idle' && 'Account connected'}
-              </p>
             )}
-          </div>
 
-          {authMode === 'local' && (
-            <button className="hub-backup-banner" onClick={() => setShowBackupPrompt(true)}>
-              ☁️ Back up your progress with a free account
-            </button>
-          )}
-          {authMode === 'local' && (
-            <button className="hub-login-link" onClick={() => setShowLoginPrompt(true)}>
-              Log into an existing account
-            </button>
-          )}
-        </div>
-      )}
+            {worldMenuOpen === true && (
+              <div className="world-menu-overlay" onClick={() => setWorldMenuOpen(false)}>
+                <div className="world-menu-panel" onClick={(e) => e.stopPropagation()}>
+                  <h2>Menu</h2>
+
+                  {save.dailyQuests && (
+                    <div className="daily-quests-card">
+                      <h3>Today's quests</h3>
+                      <ul className="daily-quests-list">
+                        <li className={save.dailyQuests.chatDone ? 'daily-quest-done' : ''}>
+                          {save.dailyQuests.chatDone ? '✅' : '☐'} Chat with your companion
+                        </li>
+                        <li className={save.dailyQuests.trainDone ? 'daily-quest-done' : ''}>
+                          {save.dailyQuests.trainDone ? '✅' : '☐'} Train a card
+                        </li>
+                        <li className={save.dailyQuests.battleWon ? 'daily-quest-done' : ''}>
+                          {save.dailyQuests.battleWon ? '✅' : '☐'} Win a battle
+                        </li>
+                      </ul>
+                      {save.dailyQuests.claimed ? (
+                        <p className="daily-quests-claimed">Reward claimed for today ✓</p>
+                      ) : (
+                        <button
+                          className="daily-quests-claim"
+                          disabled={!(save.dailyQuests.chatDone && save.dailyQuests.trainDone && save.dailyQuests.battleWon)}
+                          onClick={() => {
+                            const result = claimDailyQuests(save, save.recruitedCompanionId)
+                            if (result.claimed) setSave(result.state)
+                          }}
+                        >
+                          Claim reward (+{DAILY_QUEST_GOLD} gold{save.recruitedCompanionId ? ', +3 affection' : ''})
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="character-actions">
+                    <button onClick={() => { setWorldMenuOpen(false); setScreen({ view: 'packs' }) }}>Open Packs</button>
+                    <button onClick={() => { setWorldMenuOpen(false); setScreen({ view: 'collection' }) }}>Collection</button>
+                    <button onClick={() => { setWorldMenuOpen(false); setScreen({ view: 'partySelect' }) }}>Explore (Battle)</button>
+                    <button onClick={() => { setWorldMenuOpen(false); setScreen({ view: 'humanRecruit' }) }}>Meet Travelers</button>
+                    <button onClick={() => { setWorldMenuOpen(false); setScreen({ view: 'achievements' }) }}>Achievements</button>
+                    <button onClick={() => { setWorldMenuOpen(false); setScreen({ view: 'settings' }) }}>Settings</button>
+                    {authMode === 'account' && (
+                      <button onClick={() => { setWorldMenuOpen(false); setScreen({ view: 'account' }) }}>Account</button>
+                    )}
+                  </div>
+
+                  {authMode === 'account' && (
+                    <p className={`hub-sync-status hub-sync-status-${syncStatus}`}>
+                      {syncStatus === 'syncing' && 'Syncing…'}
+                      {syncStatus === 'synced' && 'Synced ✓'}
+                      {syncStatus === 'error' && 'Sync failed — will retry'}
+                      {syncStatus === 'offline' && 'Offline — saved locally, will sync automatically'}
+                      {syncStatus === 'idle' && 'Account connected'}
+                    </p>
+                  )}
+
+                  {authMode === 'local' && (
+                    <button className="hub-backup-banner" onClick={() => { setWorldMenuOpen(false); setShowBackupPrompt(true) }}>
+                      ☁️ Back up your progress with a free account
+                    </button>
+                  )}
+                  {authMode === 'local' && (
+                    <button className="hub-login-link" onClick={() => { setWorldMenuOpen(false); setShowLoginPrompt(true) }}>
+                      Log into an existing account
+                    </button>
+                  )}
+
+                  <button className="vn-exit" onClick={() => setWorldMenuOpen(false)}>← back to world</button>
+                </div>
+              </div>
+            )}
+          </>
+        )
+      })()}
 
       {screen.view === 'account' && authMode === 'account' && (
         <AccountSettings

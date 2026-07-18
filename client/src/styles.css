@@ -331,4 +331,74 @@ button:hover { background: rgba(255,255,255,0.16); }
 .achievement-status { font-size: 0.7rem; white-space: nowrap; }
 .achievement-status-claimed { color: #8fd18f; }
 .achievement-status-locked { opacity: 0.6; }
+
+/* ---- World (first-person explorable hub) ---- */
+.world-shell {
+  position: fixed; inset: 0; width: 100vw; height: 100vh; overflow: hidden;
+  background: #241830; touch-action: none;
+}
+.world-canvas-mount { position: absolute; inset: 0; }
+.world-canvas-mount canvas { display: block; width: 100%; height: 100%; }
+
+.world-hud-top {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: flex-start; gap: 10px; padding: 14px;
+  pointer-events: none;
+}
+.world-hud-top > * { pointer-events: auto; }
+.world-menu-btn {
+  width: 44px; height: 44px; border-radius: 50%; font-size: 1.2rem;
+  background: rgba(20,14,28,0.7); border: 1px solid rgba(255,255,255,0.25); color: #f2e9f7;
+  flex-shrink: 0;
+}
+.world-hud-card {
+  flex: 1; display: flex; align-items: center; gap: 10px;
+  background: rgba(20,14,28,0.7); border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 14px; padding: 8px 12px; font-size: 0.85rem; max-width: 320px;
+}
+.world-hud-avatar {
+  width: 30px; height: 30px; border-radius: 50%; flex-shrink: 0; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; font-weight: bold; color: #1b1226;
+}
+.world-hud-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.world-hud-gold { margin-left: auto; white-space: nowrap; opacity: 0.9; }
+
+.world-prompt {
+  position: absolute; bottom: 130px; left: 50%; transform: translateX(-50%);
+  background: rgba(20,14,28,0.85); border: 1px solid rgba(255,255,255,0.3);
+  border-radius: 14px; padding: 10px 14px; display: flex; align-items: center; gap: 12px;
+  font-size: 0.95rem; white-space: nowrap;
+}
+.world-prompt button { font-weight: bold; padding: 8px 14px; }
+
+.world-joystick {
+  position: absolute; left: 26px; bottom: 26px; width: 96px; height: 96px;
+  border-radius: 50%; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.25);
+}
+.world-joystick-nub {
+  position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px;
+  border-radius: 50%; background: rgba(255,255,255,0.35); border: 1px solid rgba(255,255,255,0.5);
+}
+
+.world-hint {
+  position: absolute; bottom: 30px; right: 20px; margin: 0; font-size: 0.72rem;
+  opacity: 0.55; text-align: right; max-width: 160px;
+}
+
+.world-menu-overlay {
+  position: fixed; inset: 0; background: rgba(10,6,14,0.88); z-index: 20;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.world-menu-panel {
+  background: #1b1226; border: 1px solid rgba(255,255,255,0.15); border-radius: 18px;
+  padding: 20px; width: 100%; max-width: 340px; max-height: 80vh; overflow-y: auto;
+}
+.world-menu-panel h2 { text-align: center; margin-top: 0; }
+.world-menu-panel .character-actions { display: flex; flex-direction: column; gap: 10px; }
+.world-menu-panel .daily-quests-card { margin-bottom: 16px; }
+
+.world-toast {
+  position: absolute; top: 70px; left: 14px; right: 14px; z-index: 5;
+  max-width: 420px; margin: 0 auto;
+}
 .achievement-claim { flex-shrink: 0; font-size: 0.75rem; font-weight: bold; padding: 8px 12px; }
