@@ -20,21 +20,35 @@ const HOUSE_TEXTURES = {
   cabin: { url: '/world/house_cabin.png', aspect: 220 / 250 },
   tower: { url: '/world/house_tower.png', aspect: 200 / 320 }
 }
+// Decorative townsfolk — generic flat-illustrated villagers (not the
+// dateable cast, who already have their own portraits elsewhere) just to
+// make the square feel lived-in instead of empty.
+const NPC_TEXTURES = [
+  { url: '/world/npc_blue.png', aspect: 160 / 380 },
+  { url: '/world/npc_apron.png', aspect: 160 / 380 },
+  { url: '/world/npc_scarf.png', aspect: 160 / 380 }
+]
 
 const textureCache = new Map()
-function loadTexture(url) {
-  if (textureCache.has(url)) return textureCache.get(url)
+function loadTexture(url, repeat) {
+  const cacheKey = repeat ? `${url}|${repeat[0]}x${repeat[1]}` : url
+  if (textureCache.has(cacheKey)) return textureCache.get(cacheKey)
   const tex = new THREE.TextureLoader().load(url)
   if ('colorSpace' in tex) tex.colorSpace = THREE.SRGBColorSpace
-  textureCache.set(url, tex)
+  if (repeat) {
+    tex.wrapS = THREE.RepeatWrapping
+    tex.wrapT = THREE.RepeatWrapping
+    tex.repeat.set(repeat[0], repeat[1])
+  }
+  textureCache.set(cacheKey, tex)
   return tex
 }
 
-// Builds one upright billboard plane for a piece of foliage/architecture
-// art: `height` is the world-space height in units, width follows the
-// source image's aspect ratio, and the plane's local origin is its base
-// so `group.position.y` can stay 0 (ground level) rather than needing a
-// half-height offset at every call site.
+// Builds one upright billboard plane for a piece of foliage/architecture/
+// character art: `height` is the world-space height in units, width
+// follows the source image's aspect ratio, and the plane's local origin
+// is its base so `group.position.y` can stay 0 (ground level) rather than
+// needing a half-height offset at every call site.
 function makeBillboard({ url, aspect }, height) {
   const width = height * aspect
   const tex = loadTexture(url)
@@ -48,13 +62,32 @@ function makeBillboard({ url, aspect }, height) {
   return group
 }
 
+// A soft dark ellipse decal flat on the ground under a billboard. This is
+// a classic cheap "grounding" trick for billboarded sprites — real shadow
+// mapping would cast the *plane's* silhouette, which would rotate with
+// the billboard as the player walks around it (a tree's shadow spinning
+// to always face you reads as very wrong). A static blob avoids that
+// entirely and still sells "this thing is standing on the ground."
+let shadowTex = null
+function makeShadowBlob(width, depth) {
+  if (!shadowTex) shadowTex = loadTexture('/world/shadow_blob.png')
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, depth),
+    new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false })
+  )
+  mesh.rotation.x = -Math.PI / 2
+  mesh.position.y = 0.02
+  return mesh
+}
+
 // Builds the static Three.js scene: ground, a lantern-lit town square, a
 // road cutting south through a field, and a forest of scattered trees.
 // Pure Three.js (no React) so it's easy to unit-reason-about and cheap to
 // rebuild if the layout ever needs to change. Returns the scene plus a
 // list of { id, mesh } beacon markers so the caller can pulse them and
 // measure distance without re-querying the scene graph, and a list of
-// { group } billboards the caller must face toward the camera each frame.
+// { group, bob } billboards the caller must face toward the camera each
+// frame (bob: true also gets a small idle sway, used for NPCs).
 export function buildWorldScene(zones) {
   const scene = new THREE.Scene()
   scene.background = new THREE.Color('#241830')
@@ -66,19 +99,20 @@ export function buildWorldScene(zones) {
   scene.add(sun)
 
   // Ground: one big base plane (grass/field) plus a lighter square patch
-  // for the town and a darker ribbon for the road, all just flat
-  // overlapping planes — cheap, no texture loading, reads fine from a
-  // first-person eye height.
+  // for the town and a darker ribbon for the road. Each now carries a
+  // seamless procedural texture (see public/world/tex_*.png, generated
+  // offline) instead of a flat solid color, so the ground reads as grass/
+  // cobblestone/dirt up close rather than a single flat-shaded polygon.
   const ground = new THREE.Mesh(
     new THREE.PlaneGeometry(240, 240),
-    new THREE.MeshStandardMaterial({ color: '#3c5a3e', roughness: 1 })
+    new THREE.MeshStandardMaterial({ map: loadTexture('/world/tex_grass.png', [60, 60]), roughness: 1 })
   )
   ground.rotation.x = -Math.PI / 2
   scene.add(ground)
 
   const townFloor = new THREE.Mesh(
     new THREE.PlaneGeometry(46, 40),
-    new THREE.MeshStandardMaterial({ color: '#8a7a63', roughness: 1 })
+    new THREE.MeshStandardMaterial({ map: loadTexture('/world/tex_town_floor.png', [11, 10]), roughness: 0.9 })
   )
   townFloor.rotation.x = -Math.PI / 2
   townFloor.position.set(-4, 0.01, -6)
@@ -86,7 +120,7 @@ export function buildWorldScene(zones) {
 
   const forestFloor = new THREE.Mesh(
     new THREE.PlaneGeometry(46, 46),
-    new THREE.MeshStandardMaterial({ color: '#25422c', roughness: 1 })
+    new THREE.MeshStandardMaterial({ map: loadTexture('/world/tex_forest_floor.png', [11, 11]), roughness: 1 })
   )
   forestFloor.rotation.x = -Math.PI / 2
   forestFloor.position.set(4, 0.005, -48)
@@ -94,7 +128,7 @@ export function buildWorldScene(zones) {
 
   const road = new THREE.Mesh(
     new THREE.PlaneGeometry(7, 100),
-    new THREE.MeshStandardMaterial({ color: '#4a4550', roughness: 1 })
+    new THREE.MeshStandardMaterial({ map: loadTexture('/world/tex_road.png', [2, 25]), roughness: 1 })
   )
   road.rotation.x = -Math.PI / 2
   road.position.set(-2, 0.015, -20)
@@ -117,7 +151,31 @@ export function buildWorldScene(zones) {
     const group = makeBillboard(HOUSE_TEXTURES[b.kind], b.h)
     group.position.set(b.x, 0, b.z)
     scene.add(group)
+    const shadow = makeShadowBlob(b.h * 0.85, b.h * 0.5)
+    shadow.position.set(b.x, 0.02, b.z)
+    scene.add(shadow)
     billboards.push({ group })
+  }
+
+  // Decorative townsfolk: a handful of generic villagers standing around
+  // the square so it doesn't feel abandoned. Purely cosmetic — no
+  // dialogue, no proximity prompt — that's what the zone beacons below
+  // are for. `bob: true` gets a slow idle sway in World.jsx's tick loop
+  // so they read as alive rather than propped-up cutouts.
+  const npcSpecs = [
+    { x: 6, z: -3, kind: 0 },
+    { x: -9, z: 5, kind: 1 },
+    { x: 9, z: 11, kind: 2 },
+    { x: -20, z: -15, kind: 1 }
+  ]
+  for (const n of npcSpecs) {
+    const group = makeBillboard(NPC_TEXTURES[n.kind], 1.8)
+    group.position.set(n.x, 0, n.z)
+    scene.add(group)
+    const shadow = makeShadowBlob(1.1, 0.6)
+    shadow.position.set(n.x, 0.02, n.z)
+    scene.add(shadow)
+    billboards.push({ group, bob: true, bobOffset: n.x + n.z })
   }
 
   // Forest: a scattered but seeded (not random-per-render) cluster of
@@ -137,6 +195,9 @@ export function buildWorldScene(zones) {
     const group = makeBillboard(tex, height)
     group.position.set(x, 0, z)
     scene.add(group)
+    const shadow = makeShadowBlob(height * 0.55, height * 0.32)
+    shadow.position.set(x, 0.02, z)
+    scene.add(shadow)
     billboards.push({ group })
   }
 
