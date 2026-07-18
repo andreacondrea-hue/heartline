@@ -1,12 +1,60 @@
 import * as THREE from 'three'
 import { WORLD_BOUNDS } from './zones'
 
+// Trees and buildings are real flat-illustrated art on camera-facing
+// billboards (see public/world/*.png) rather than procedural cone/box
+// geometry — the low-poly placeholders read as "a cone" and "a colored
+// square" up close, which is exactly what got called out. Each billboard
+// is a plane sized to its source image's aspect ratio, anchored at ground
+// level, with its Y-rotation updated every frame by the caller (see
+// World.jsx's tick loop) so it always faces the camera around the
+// vertical axis — classic sprite-in-3D "cylindrical billboarding," which
+// keeps trees upright even as the player looks up/down.
+const TREE_TEXTURES = [
+  { url: '/world/tree_green.png', aspect: 270 / 480 },
+  { url: '/world/tree_autumn.png', aspect: 244 / 480 },
+  { url: '/world/tree_pine.png', aspect: 230 / 480 }
+]
+const HOUSE_TEXTURES = {
+  cottage: { url: '/world/house_cottage.png', aspect: 220 / 260 },
+  cabin: { url: '/world/house_cabin.png', aspect: 220 / 250 },
+  tower: { url: '/world/house_tower.png', aspect: 200 / 320 }
+}
+
+const textureCache = new Map()
+function loadTexture(url) {
+  if (textureCache.has(url)) return textureCache.get(url)
+  const tex = new THREE.TextureLoader().load(url)
+  if ('colorSpace' in tex) tex.colorSpace = THREE.SRGBColorSpace
+  textureCache.set(url, tex)
+  return tex
+}
+
+// Builds one upright billboard plane for a piece of foliage/architecture
+// art: `height` is the world-space height in units, width follows the
+// source image's aspect ratio, and the plane's local origin is its base
+// so `group.position.y` can stay 0 (ground level) rather than needing a
+// half-height offset at every call site.
+function makeBillboard({ url, aspect }, height) {
+  const width = height * aspect
+  const tex = loadTexture(url)
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(width, height),
+    new THREE.MeshBasicMaterial({ map: tex, transparent: true, alphaTest: 0.35 })
+  )
+  mesh.position.y = height / 2
+  const group = new THREE.Group()
+  group.add(mesh)
+  return group
+}
+
 // Builds the static Three.js scene: ground, a lantern-lit town square, a
 // road cutting south through a field, and a forest of scattered trees.
 // Pure Three.js (no React) so it's easy to unit-reason-about and cheap to
 // rebuild if the layout ever needs to change. Returns the scene plus a
 // list of { id, mesh } beacon markers so the caller can pulse them and
-// measure distance without re-querying the scene graph.
+// measure distance without re-querying the scene graph, and a list of
+// { group } billboards the caller must face toward the camera each frame.
 export function buildWorldScene(zones) {
   const scene = new THREE.Scene()
   scene.background = new THREE.Color('#241830')
@@ -52,29 +100,29 @@ export function buildWorldScene(zones) {
   road.position.set(-2, 0.015, -20)
   scene.add(road)
 
-  // Town buildings: simple colored boxes, enough to make the square read
-  // as a place rather than an empty lot. Positions are cosmetic dressing,
-  // separate from the interactive zone markers below.
+  const billboards = []
+
+  // Town buildings: real illustrated house art on billboards (see
+  // public/world/house_*.png) instead of flat-colored boxes. Positions/
+  // sizes are cosmetic dressing, separate from the interactive zone
+  // markers below.
   const buildingSpecs = [
-    { x: -14, z: -10, w: 8, h: 6, d: 7, color: '#5a4a72' }, // bookshop block
-    { x: 14, z: -8, w: 7, h: 5, d: 6, color: '#3f5a78' }, // corner block
-    { x: -4, z: 14, w: 5, h: 4, d: 5, color: '#6a4630' }, // cottage
-    { x: 18, z: 6, w: 4, h: 3, d: 4, color: '#7a6a2a' }, // market stall
-    { x: -32, z: -18, w: 7, h: 5, d: 6, color: '#6a3a5a' } // inn
+    { x: -14, z: -10, h: 6.4, kind: 'tower' }, // bookshop block
+    { x: 14, z: -8, h: 5.6, kind: 'cottage' }, // corner block
+    { x: -4, z: 14, h: 4.6, kind: 'cottage' }, // cottage
+    { x: 18, z: 6, h: 3.8, kind: 'cabin' }, // market stall
+    { x: -32, z: -18, h: 5.8, kind: 'tower' } // inn
   ]
   for (const b of buildingSpecs) {
-    const box = new THREE.Mesh(
-      new THREE.BoxGeometry(b.w, b.h, b.d),
-      new THREE.MeshStandardMaterial({ color: b.color, roughness: 0.9 })
-    )
-    box.position.set(b.x, b.h / 2, b.z)
-    scene.add(box)
+    const group = makeBillboard(HOUSE_TEXTURES[b.kind], b.h)
+    group.position.set(b.x, 0, b.z)
+    scene.add(group)
+    billboards.push({ group })
   }
 
   // Forest: a scattered but seeded (not random-per-render) cluster of
-  // cone-and-cylinder trees south of the town, thinning out toward the
-  // edges of the map so it doesn't look like a wall.
-  const treeGroup = new THREE.Group()
+  // billboard trees south of the town, thinning out toward the edges of
+  // the map so it doesn't look like a wall.
   let seed = 42
   const rand = () => {
     seed = (seed * 1103515245 + 12345) & 0x7fffffff
@@ -84,19 +132,13 @@ export function buildWorldScene(zones) {
     const x = 4 + (rand() - 0.5) * 44
     const z = -48 + (rand() - 0.5) * 44
     if (Math.abs(x - 0) < 5 && z > -46) continue // keep the trail clear
-    const trunk = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.25, 0.32, 2.2, 6),
-      new THREE.MeshStandardMaterial({ color: '#4a3520', roughness: 1 })
-    )
-    const top = new THREE.Mesh(
-      new THREE.ConeGeometry(1.4 + rand() * 0.8, 3 + rand() * 1.6, 7),
-      new THREE.MeshStandardMaterial({ color: '#2f5c38', roughness: 1 })
-    )
-    trunk.position.set(x, 1.1, z)
-    top.position.set(x, 2.6 + rand(), z)
-    treeGroup.add(trunk, top)
+    const tex = TREE_TEXTURES[Math.floor(rand() * TREE_TEXTURES.length)]
+    const height = 4.2 + rand() * 1.8
+    const group = makeBillboard(tex, height)
+    group.position.set(x, 0, z)
+    scene.add(group)
+    billboards.push({ group })
   }
-  scene.add(treeGroup)
 
   // Boundary hint: a low translucent wall ring so the player feels an
   // edge instead of just stopping with no explanation.
@@ -129,5 +171,5 @@ export function buildWorldScene(zones) {
     return { id: z.id, group, beam }
   })
 
-  return { scene, beacons }
+  return { scene, beacons, billboards }
 }
