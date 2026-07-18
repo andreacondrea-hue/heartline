@@ -594,6 +594,9 @@ export default function App() {
           <>
             <World
               companionId={save.recruitedCompanionId}
+              companionName={c ? c.name : null}
+              gold={save.gold}
+              battlesWon={save.stats?.battlesWon || 0}
               onOpenMenu={() => setWorldMenuOpen(true)}
               onEnterZone={(action) => {
                 if (action === 'companion') {
