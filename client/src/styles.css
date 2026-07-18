@@ -1,0 +1,334 @@
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body {
+  background: #1b1226;
+  color: #f2e9f7;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+
+.app-shell { max-width: 480px; margin: 0 auto; min-height: 100%; padding: 24px 16px 40px; }
+.app-header { text-align: center; margin-bottom: 24px; }
+.app-header h1 { font-size: 2rem; margin: 0; letter-spacing: 0.02em; }
+.app-subtitle { opacity: 0.6; margin: 4px 0 0; font-size: 0.9rem; }
+
+.select-grid { display: flex; flex-direction: column; gap: 16px; }
+.character-card {
+  border: 2px solid; border-radius: 16px; padding: 16px; text-align: center;
+  background: rgba(255,255,255,0.03);
+}
+.character-avatar {
+  width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 8px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.6rem; font-weight: bold; color: #1b1226;
+  overflow: hidden;
+}
+.character-avatar img {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.vn-portrait {
+  width: 100%; max-height: 220px; object-fit: cover; object-position: top;
+  border-radius: 10px; margin-bottom: 12px;
+}
+.vn-cg {
+  width: 100%; max-height: 320px; object-fit: cover; object-position: center;
+  border-radius: 10px; margin-bottom: 12px;
+}
+.chat-header-identity { display: flex; align-items: center; gap: 8px; }
+.chat-header-avatar {
+  width: 32px; height: 32px; border-radius: 50%; object-fit: cover;
+}
+.chat-header-stage { font-size: 0.68rem; font-weight: normal; opacity: 0.65; margin-top: 1px; }
+.chat-header-actions { display: flex; align-items: center; gap: 8px; }
+.chat-gift-toggle { font-size: 0.8rem; padding: 8px 10px; }
+.character-card h2 { margin: 4px 0; }
+.character-tagline { opacity: 0.7; font-size: 0.9rem; margin: 0 0 8px; }
+.affection-meter { font-size: 0.85rem; opacity: 0.8; margin: 0 0 12px; }
+.character-actions { display: flex; gap: 8px; justify-content: center; }
+
+button {
+  background: rgba(255,255,255,0.08); color: #f2e9f7; border: 1px solid rgba(255,255,255,0.2);
+  border-radius: 10px; padding: 10px 14px; font-size: 0.9rem; cursor: pointer;
+}
+button:hover { background: rgba(255,255,255,0.16); }
+
+.vn-screen {
+  border: 2px solid; border-radius: 16px; padding: 20px; min-height: 320px;
+  background: rgba(255,255,255,0.03); display: flex; flex-direction: column;
+}
+.vn-speaker { font-weight: bold; margin-bottom: 8px; }
+.vn-text { line-height: 1.5; flex: 1; }
+.vn-choices { display: flex; flex-direction: column; gap: 8px; margin-top: 16px; }
+.vn-choice { text-align: left; }
+.vn-choice-primary { border: 2px solid; font-weight: bold; }
+.vn-exit { margin-top: 16px; align-self: flex-start; opacity: 0.7; background: none; border: none; }
+
+.chat-screen { display: flex; flex-direction: column; height: 70vh; }
+.chat-header {
+  display: flex; justify-content: space-between; align-items: center;
+  border-bottom: 2px solid; padding-bottom: 8px; margin-bottom: 12px; font-weight: bold;
+}
+.chat-log { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; padding: 4px; }
+.chat-empty { opacity: 0.5; text-align: center; margin-top: 40px; }
+.chat-bubble { max-width: 80%; padding: 10px 14px; border-radius: 14px; line-height: 1.4; }
+.chat-user { align-self: flex-end; background: #4a2f63; }
+.chat-assistant { align-self: flex-start; background: rgba(255,255,255,0.1); }
+.chat-typing { opacity: 0.5; }
+.chat-error { color: #ff9d9d; font-size: 0.85rem; margin: 8px 0; }
+.chat-input-row { display: flex; gap: 8px; margin-top: 12px; }
+.chat-input-row input {
+  flex: 1; border-radius: 10px; border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.05); color: #f2e9f7; padding: 10px 12px;
+}
+
+/* ---- Gift picker (ChatScreen) ---- */
+.chat-gift-panel {
+  background: rgba(255,255,255,0.05); border-radius: 12px; padding: 10px;
+  margin-bottom: 10px;
+}
+.chat-gift-panel-hint { font-size: 0.75rem; opacity: 0.7; margin: 0 0 8px; text-align: center; }
+.chat-gift-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.chat-gift-item {
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 4px; font-size: 0.68rem; text-align: center;
+}
+.chat-gift-item:disabled { opacity: 0.35; cursor: not-allowed; }
+.chat-gift-emoji { font-size: 1.3rem; }
+.chat-gift-name { line-height: 1.2; }
+.chat-gift-cost { opacity: 0.7; }
+
+/* ---- Daily check-in bonus (hub) ---- */
+.daily-bonus-banner {
+  display: flex; flex-direction: column; gap: 8px; align-items: center;
+  text-align: center; font-size: 0.85rem; background: rgba(200,107,152,0.15);
+  border: 1px dashed rgba(255,255,255,0.3); border-radius: 12px; padding: 12px;
+}
+.daily-bonus-banner button { font-size: 0.75rem; padding: 6px 10px; }
+
+/* ---- Daily quest checklist (hub) ---- */
+.daily-quests-card {
+  border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 14px;
+  background: rgba(255,255,255,0.03); text-align: left;
+}
+.daily-quests-card h3 { margin: 0 0 8px; font-size: 0.9rem; text-align: center; }
+.daily-quests-list { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.82rem; opacity: 0.85; }
+.daily-quest-done { opacity: 0.6; text-decoration: line-through; }
+.daily-quests-claim { width: 100%; font-size: 0.8rem; font-weight: bold; }
+.daily-quests-claim:disabled { opacity: 0.4; cursor: not-allowed; }
+.daily-quests-claimed { text-align: center; font-size: 0.78rem; color: #8fd18f; margin: 0; }
+
+/* ---- Elemental type badges (Collection, PartySelect, BattleArena) ---- */
+.collection-card-type { font-size: 0.62rem; font-weight: bold; margin-bottom: 4px; opacity: 0.9; }
+.battle-type-badge { font-size: 0.62rem; font-weight: bold; margin-top: 2px; }
+
+/* ---- Pre-battle tactic/stance picker (BattleArena) ---- */
+.battle-tactic-picker { margin: 18px 0; }
+.battle-tactic-hint { font-size: 0.8rem; opacity: 0.75; margin-bottom: 10px; }
+.battle-tactic-options { display: flex; gap: 8px; }
+.battle-tactic-option {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  padding: 10px 6px; font-size: 0.68rem; text-align: center;
+}
+.battle-tactic-option-chosen { background: rgba(200,107,152,0.22); box-shadow: 0 0 0 2px rgba(200,107,152,0.5) inset; }
+.battle-tactic-emoji { font-size: 1.2rem; }
+.battle-tactic-label { font-weight: bold; font-size: 0.75rem; }
+.battle-tactic-desc { opacity: 0.7; line-height: 1.3; }
+
+/* ---- Character creation ---- */
+.creation-screen h1 { text-align: center; }
+.creation-intro { opacity: 0.75; font-size: 0.9rem; text-align: center; margin-bottom: 20px; }
+.creation-field {
+  display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; font-size: 0.9rem; opacity: 0.9;
+}
+.creation-field input, .creation-field textarea {
+  border-radius: 10px; border: 1px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.05); color: #f2e9f7; padding: 10px 12px; font-family: inherit;
+}
+.creation-choices { display: flex; gap: 8px; }
+.creation-choice { flex: 1; }
+.creation-choice-selected { border-color: #c86b98; background: rgba(200,107,152,0.25); }
+.creation-age-gate {
+  display: flex; gap: 10px; align-items: flex-start; font-size: 0.85rem; opacity: 0.9;
+  background: rgba(255,255,255,0.05); border-radius: 10px; padding: 12px; margin-bottom: 16px;
+}
+.creation-age-gate input { margin-top: 3px; }
+.creation-error { color: #ff9d9d; font-size: 0.85rem; margin-bottom: 12px; }
+.creation-submit { width: 100%; font-weight: bold; }
+
+/* ---- Companion select (first mission) ---- */
+.companion-select-screen h2 { text-align: center; }
+
+/* ---- First battle & real battle (BattleArena) ---- */
+.battle-screen { text-align: center; }
+.battle-party { display: flex; gap: 12px; justify-content: center; margin: 16px 0; flex-wrap: wrap; }
+.battle-party-card { width: 64px; font-size: 0.75rem; }
+.battle-party-card img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; }
+.battle-emoji { font-size: 2rem; display: block; }
+.battle-vs { opacity: 0.5; font-size: 0.8rem; margin: 4px 0; }
+.battle-log {
+  margin-top: 16px; text-align: left; background: rgba(255,255,255,0.05);
+  border-radius: 10px; padding: 12px; font-size: 0.9rem; line-height: 1.6;
+  max-height: 280px; overflow-y: auto;
+}
+.battle-log-round { opacity: 0.6; font-weight: bold; margin: 10px 0 4px; font-size: 0.8rem; }
+.battle-result { margin-top: 16px; padding: 12px; border-radius: 10px; }
+.battle-result-win { background: rgba(95,168,95,0.18); }
+.battle-result-lose { background: rgba(200,107,152,0.14); }
+
+/* ---- Party select (real battle) ---- */
+.party-select-screen h2 { text-align: center; }
+.party-select-hint { text-align: center; opacity: 0.7; font-size: 0.85rem; margin-bottom: 16px; }
+.party-select-card { cursor: pointer; }
+.party-select-card-chosen { background: rgba(255,255,255,0.1); box-shadow: 0 0 0 2px rgba(255,255,255,0.3) inset; }
+.party-select-actions { display: flex; gap: 10px; margin-top: 20px; }
+.party-select-actions .creation-submit { flex: 1; }
+
+/* ---- Packs ---- */
+.pack-screen h2 { text-align: center; }
+.pack-gold { text-align: center; opacity: 0.8; margin-bottom: 12px; }
+.pack-starter-button { width: 100%; margin-bottom: 16px; font-weight: bold; }
+.pack-list { display: flex; flex-direction: column; gap: 8px; }
+.pack-row {
+  display: flex; justify-content: space-between; align-items: center;
+  background: rgba(255,255,255,0.05); border-radius: 10px; padding: 10px 14px;
+}
+.pack-row-label { font-weight: bold; }
+.pack-row-cost { font-size: 0.8rem; opacity: 0.7; }
+.pack-reveal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(90px, 1fr)); gap: 12px; margin: 16px 0; }
+.pack-reveal-card { border: 2px solid; border-radius: 10px; padding: 8px; text-align: center; }
+.pack-reveal-thumb {
+  width: 100%; aspect-ratio: 1; border-radius: 8px; overflow: hidden; border: 1px solid;
+  display: flex; align-items: center; justify-content: center; font-size: 1.8rem; margin-bottom: 6px;
+}
+.pack-reveal-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.pack-reveal-name { font-size: 0.8rem; font-weight: bold; }
+.pack-reveal-tier { font-size: 0.7rem; }
+
+/* ---- Collection ---- */
+.collection-screen h2 { text-align: center; }
+.collection-tier-group { margin-bottom: 20px; }
+.collection-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 12px; }
+.collection-card { border: 2px solid; border-radius: 10px; padding: 8px; text-align: center; }
+.collection-card-thumb {
+  width: 100%; aspect-ratio: 1; border-radius: 8px; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; font-size: 1.8rem; margin-bottom: 6px;
+  background: rgba(255,255,255,0.05);
+}
+.collection-card-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.collection-card-name { font-size: 0.75rem; font-weight: bold; }
+.collection-card-level { font-size: 0.7rem; opacity: 0.7; margin-bottom: 2px; }
+.collection-card-stats { font-size: 0.62rem; opacity: 0.65; margin-bottom: 6px; line-height: 1.3; }
+.collection-xp-bar {
+  width: 100%; height: 6px; border-radius: 4px; background: rgba(255,255,255,0.1);
+  overflow: hidden; margin-bottom: 6px;
+}
+.collection-xp-fill { height: 100%; border-radius: 4px; transition: width 0.2s ease; }
+.collection-train-button { width: 100%; font-size: 0.7rem; padding: 6px 4px; }
+.collection-train-button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ---- Human bond (Collection add-on) ---- */
+.collection-bond-label { font-size: 0.62rem; opacity: 0.75; margin-bottom: 3px; }
+.collection-bond-bar { margin-bottom: 4px; }
+.collection-bond-button { width: 100%; font-size: 0.7rem; padding: 6px 4px; margin-top: 4px; border-color: rgba(200,107,152,0.5); }
+.collection-bond-button:disabled { opacity: 0.4; cursor: not-allowed; }
+.collection-bond-max { color: #c86b98; font-weight: bold; opacity: 1; }
+
+/* ---- Human recruitment ---- */
+.human-recruit-screen h2 { text-align: center; }
+.human-recruit-hint { text-align: center; opacity: 0.75; font-size: 0.85rem; margin-bottom: 20px; line-height: 1.4; }
+.human-recruit-list { display: flex; flex-direction: column; gap: 12px; }
+.human-recruit-card {
+  display: flex; align-items: center; gap: 12px; border: 2px solid rgba(255,255,255,0.15);
+  border-radius: 12px; padding: 12px; background: rgba(255,255,255,0.03);
+}
+.human-recruit-avatar {
+  width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0; overflow: hidden;
+  display: flex; align-items: center; justify-content: center; font-size: 1.6rem;
+  background: rgba(255,255,255,0.06);
+}
+.human-recruit-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.human-recruit-info { flex: 1; text-align: left; }
+.human-recruit-name { font-weight: bold; }
+.human-recruit-tagline { font-size: 0.8rem; opacity: 0.75; margin: 2px 0; }
+.human-recruit-ability { font-size: 0.72rem; opacity: 0.6; margin: 0; }
+.human-recruit-joined-note { font-size: 0.8rem; opacity: 0.7; margin-top: 16px; text-align: center; }
+
+.hub-menu-card { border-color: rgba(255,255,255,0.2) !important; }
+
+/* ---- Account / backend sync ---- */
+.auth-gate-screen h2 { text-align: center; }
+.auth-gate-hint { text-align: center; opacity: 0.75; font-size: 0.85rem; margin-bottom: 20px; line-height: 1.4; }
+.auth-gate-screen button { width: 100%; margin-bottom: 10px; }
+.auth-gate-screen .creation-submit { font-weight: bold; }
+.hub-backup-banner {
+  width: 100%; margin-top: 4px; font-size: 0.8rem; opacity: 0.85;
+  border-style: dashed;
+}
+.hub-login-link {
+  width: 100%; margin-top: 4px; font-size: 0.75rem; opacity: 0.6;
+  background: none; border: none; text-decoration: underline;
+}
+.hub-sync-status { text-align: center; font-size: 0.68rem; opacity: 0.6; margin: 6px 0 0; }
+.hub-sync-status-error { color: #ff9d9d; opacity: 0.9; }
+.hub-sync-status-synced { color: #8fd18f; }
+.hub-sync-status-offline { color: #f0c674; opacity: 0.9; }
+
+.auth-gate-forgot {
+  width: 100%; margin-top: -4px; background: none; border: none;
+  font-size: 0.78rem; opacity: 0.65; text-decoration: underline;
+}
+.recovery-code-display {
+  font-family: 'SF Mono', Consolas, monospace; font-size: 1.15rem; letter-spacing: 0.05em;
+  text-align: center; background: rgba(255,255,255,0.08); border: 1px dashed rgba(255,255,255,0.3);
+  border-radius: 10px; padding: 14px; margin: 12px 0; user-select: all;
+}
+.recovery-code-confirm {
+  display: flex; align-items: flex-start; gap: 8px; font-size: 0.82rem; opacity: 0.9;
+  margin-bottom: 14px; text-align: left;
+}
+.recovery-code-confirm input { margin-top: 3px; }
+
+/* ---- Account settings ---- */
+.account-settings-screen h2 { text-align: center; }
+.account-settings-section {
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 14px;
+  margin-bottom: 14px; background: rgba(255,255,255,0.03);
+}
+.account-settings-section h3 { margin: 0 0 10px; font-size: 0.95rem; }
+.account-settings-section button { width: 100%; }
+.account-settings-ok { color: #8fd18f; font-size: 0.85rem; margin-bottom: 10px; }
+.account-settings-logout { border-color: rgba(255,157,157,0.4); }
+
+/* ---- Settings (audio) ---- */
+.settings-screen h2 { text-align: center; }
+.settings-section {
+  border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 16px;
+  margin-bottom: 16px; background: rgba(255,255,255,0.03);
+}
+.settings-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 14px; font-size: 0.85rem;
+}
+.settings-row:last-child { margin-bottom: 0; }
+.settings-row input[type="range"] { flex: 1; max-width: 60%; }
+.settings-row-checkbox input[type="checkbox"] { width: 18px; height: 18px; flex: none; }
+.settings-hint { font-size: 0.78rem; opacity: 0.65; line-height: 1.4; margin-bottom: 16px; }
+
+/* ---- Achievements ---- */
+.achievements-screen h2 { text-align: center; }
+.achievements-hint { text-align: center; opacity: 0.7; font-size: 0.85rem; margin-bottom: 16px; }
+.achievements-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+.achievement-card {
+  display: flex; align-items: center; gap: 10px; border: 2px solid rgba(255,255,255,0.12);
+  border-radius: 12px; padding: 10px 12px; background: rgba(255,255,255,0.03); opacity: 0.6;
+}
+.achievement-card-ready { opacity: 1; border-color: rgba(200,107,152,0.6); background: rgba(200,107,152,0.1); }
+.achievement-card-claimed { opacity: 0.85; border-color: rgba(143,209,143,0.4); }
+.achievement-emoji { font-size: 1.6rem; flex-shrink: 0; }
+.achievement-info { flex: 1; text-align: left; }
+.achievement-name { font-weight: bold; font-size: 0.88rem; }
+.achievement-desc { font-size: 0.75rem; opacity: 0.75; margin: 2px 0; }
+.achievement-reward { font-size: 0.7rem; opacity: 0.6; }
+.achievement-status { font-size: 0.7rem; white-space: nowrap; }
+.achievement-status-claimed { color: #8fd18f; }
+.achievement-status-locked { opacity: 0.6; }
+.achievement-claim { flex-shrink: 0; font-size: 0.75rem; font-weight: bold; padding: 8px 12px; }
