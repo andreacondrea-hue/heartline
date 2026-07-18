@@ -1,5 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js'
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js'
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js'
 import { buildWorldScene } from '../engine/world/WorldScene'
 import { allZones, WORLD_BOUNDS } from '../engine/world/zones'
 import { NPC_VILLAGERS, npcContextMessage } from '../data/npcVillagers'
@@ -94,13 +98,37 @@ export default function World({ companionId, companionName, gold, battlesWon, on
   useEffect(() => {
     const mount = mountRef.current
     const zones = allZones(companionId)
-    const { scene, beacons, billboards } = buildWorldScene(zones)
+    const { scene, beacons, npcRigs } = buildWorldScene(zones)
 
     const camera = new THREE.PerspectiveCamera(70, mount.clientWidth / mount.clientHeight, 0.1, 300)
     const renderer = new THREE.WebGLRenderer({ antialias: true })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
     renderer.setSize(mount.clientWidth, mount.clientHeight)
+    // Real shadow mapping (soft-filtered) now that trees/buildings/NPCs are
+    // actual 3D geometry rather than flat billboards — a billboard's cast
+    // shadow would have rotated with it as the player walked around, which
+    // is why the old version faked grounding with a static shadow-blob
+    // decal instead. Real geometry doesn't have that problem.
+    renderer.shadowMap.enabled = true
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
+    renderer.toneMappingExposure = 1.05
     mount.appendChild(renderer.domElement)
+
+    // Light post-processing: bloom picks out the lantern/beacon glow and
+    // window lights against the dusk sky, which reads as a big part of
+    // "atmosphere" for very little GPU cost — kept deliberately subtle and
+    // without SSAO/AO passes so this still runs comfortably on a phone.
+    const composer = new EffectComposer(renderer)
+    composer.addPass(new RenderPass(scene, camera))
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(mount.clientWidth, mount.clientHeight),
+      0.45, // strength
+      0.4, // radius
+      0.82 // threshold
+    )
+    composer.addPass(bloomPass)
+    composer.addPass(new OutputPass())
 
     const st = stateRef.current
 
@@ -108,6 +136,8 @@ export default function World({ companionId, companionName, gold, battlesWon, on
       camera.aspect = mount.clientWidth / mount.clientHeight
       camera.updateProjectionMatrix()
       renderer.setSize(mount.clientWidth, mount.clientHeight)
+      composer.setSize(mount.clientWidth, mount.clientHeight)
+      bloomPass.setSize(mount.clientWidth, mount.clientHeight)
     }
     window.addEventListener('resize', resize)
 
@@ -206,24 +236,19 @@ export default function World({ companionId, companionName, gold, battlesWon, on
         setNearNpc(withinNpc)
       }
 
-      // Face every tree/building billboard toward the camera around the
-      // vertical axis only, so they stay upright (see WorldScene.js) —
-      // full quaternion-copy billboarding would tilt them as the player
-      // looks up/down, which reads as wrong for things planted in the
-      // ground.
-      for (const bb of billboards) {
-        bb.group.rotation.y = Math.atan2(
-          camera.position.x - bb.group.position.x,
-          camera.position.z - bb.group.position.z
-        )
-        // Small idle sway for NPCs so they read as alive rather than
-        // propped-up cutouts standing in the square.
-        if (bb.bob) {
-          bb.group.position.y = Math.sin(now / 700 + bb.bobOffset) * 0.03
-        }
+      // Idle animation for the hand-built villagers: a small torso bob plus
+      // a gentle arm swing so they read as alive rather than static props.
+      // Trees and buildings are real static geometry now — with actual
+      // volume rather than a flat sprite, they no longer need to fake
+      // "facing the camera" the way the old billboards did.
+      const bobT = now / 700
+      for (const rig of npcRigs) {
+        rig.bodyGroup.position.y = Math.sin(bobT + rig.bobOffset) * 0.025
+        rig.arms[0].rotation.x = Math.sin(bobT * 0.9 + rig.bobOffset) * 0.12
+        rig.arms[1].rotation.x = -Math.sin(bobT * 0.9 + rig.bobOffset) * 0.12
       }
 
-      renderer.render(scene, camera)
+      composer.render()
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
