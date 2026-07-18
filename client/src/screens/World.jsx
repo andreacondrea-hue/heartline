@@ -149,6 +149,11 @@ export default function World({ companionId, onEnterZone, onOpenMenu, hud }) {
           camera.position.x - bb.group.position.x,
           camera.position.z - bb.group.position.z
         )
+        // Small idle sway for NPCs so they read as alive rather than
+        // propped-up cutouts standing in the square.
+        if (bb.bob) {
+          bb.group.position.y = Math.sin(now / 700 + bb.bobOffset) * 0.03
+        }
       }
 
       renderer.render(scene, camera)
