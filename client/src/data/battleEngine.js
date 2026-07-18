@@ -33,6 +33,7 @@
 import { statsAtLevel } from './leveling'
 import { cardsByTier } from './cards'
 import { effectivenessMultiplier, effectivenessLabel } from './types'
+import { fxForEffect } from './battleFx'
 
 const MAX_ROUNDS = 30
 
@@ -169,13 +170,17 @@ function resolveActorTurn(actor, combatants, log, randomFn) {
     st.dotTurns -= 1
     if (st.dotTurns <= 0) st.dotDamage = 0
     const tail = actor.hp <= 0 ? ` — ${actor.name} is knocked out!` : ` (${actor.hp}/${actor.maxHp} HP left)`
-    log.push({ type: 'action', text: `${actor.name} takes ${dmg} bleed damage${tail}` })
+    log.push({
+      type: 'action', text: `${actor.name} takes ${dmg} bleed damage${tail}`,
+      kind: 'dot', fx: 'poison', actorId: actor.cardId, dmg,
+      targetHpAfter: actor.hp, targetMaxHp: actor.maxHp, ko: actor.hp <= 0
+    })
     if (actor.hp <= 0) return
   }
 
   if (st.stunnedTurns > 0) {
     st.stunnedTurns -= 1
-    log.push({ type: 'action', text: `${actor.name} is stunned and can't act this turn!` })
+    log.push({ type: 'action', text: `${actor.name} is stunned and can't act this turn!`, kind: 'stunned', fx: 'stun', actorId: actor.cardId })
     return
   }
 
@@ -199,19 +204,27 @@ function resolveActorTurn(actor, combatants, log, randomFn) {
   }
 
   function singleAttack(target, opts = {}) {
+    const effectType = actor.ability?.effect?.type || null
     const miss = rollsMiss(actor, target, randomFn)
     if (miss) {
       log.push({
         type: 'action',
         text: miss === 'attacker'
           ? `${actor.name}'s attack goes wide and misses ${target.name}!`
-          : `${target.name} dodges ${actor.name}'s attack!`
+          : `${target.name} dodges ${actor.name}'s attack!`,
+        kind: 'miss', fx: 'miss', hit: false, dmg: 0,
+        actorId: actor.cardId, actorType: actor.type, targetId: target.cardId, effectType
       })
       return { hit: false, dmg: 0 }
     }
     const { dmg, typeMult } = computeDamage(actor, target, randomFn, combatants, opts)
     target.hp = Math.max(0, target.hp - dmg)
-    log.push({ type: 'action', text: hitLine(actor, target, dmg, opts.abilityName, typeMult) })
+    log.push({
+      type: 'action', text: hitLine(actor, target, dmg, opts.abilityName, typeMult),
+      kind: 'attack', fx: fxForEffect(effectType, actor.type), hit: true, dmg, typeMult,
+      actorId: actor.cardId, actorType: actor.type, targetId: target.cardId, effectType,
+      targetHpAfter: target.hp, targetMaxHp: target.maxHp, ko: target.hp <= 0
+    })
     return { hit: true, dmg }
   }
 
@@ -225,7 +238,10 @@ function resolveActorTurn(actor, combatants, log, randomFn) {
       const hurt = livingCombatants(combatants, alliedSide).filter((a) => a.hp < a.maxHp)
       hurt.forEach((a) => { a.hp = Math.min(a.maxHp, a.hp + healAmt) })
       if (hurt.length > 0) {
-        log.push({ type: 'action', text: `${actor.name}'s ${actor.ability.name} tends the party's wounds for ${healAmt} HP each.` })
+        log.push({
+          type: 'action', text: `${actor.name}'s ${actor.ability.name} tends the party's wounds for ${healAmt} HP each.`,
+          kind: 'heal', fx: 'heal', actorId: actor.cardId, targetIds: hurt.map((a) => a.cardId), healAmt, effectType: effect.type
+        })
       }
     } else if (effect.type === 'healLowestAllyPassive') {
       const hurt = livingCombatants(combatants, alliedSide).filter((a) => a.hp < a.maxHp)
@@ -233,7 +249,11 @@ function resolveActorTurn(actor, combatants, log, randomFn) {
         const target = hurt.reduce((lowest, a) => (a.hp / a.maxHp < lowest.hp / lowest.maxHp ? a : lowest), hurt[0])
         const healAmt = Math.max(1, Math.round(actor.maxHp * effect.healFraction))
         target.hp = Math.min(target.maxHp, target.hp + healAmt)
-        log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, healing ${target.name} for ${healAmt} HP.` })
+        log.push({
+          type: 'action', text: `${actor.name} uses ${actor.ability.name}, healing ${target.name} for ${healAmt} HP.`,
+          kind: 'heal', fx: 'heal', actorId: actor.cardId, targetId: target.cardId, healAmt, effectType: effect.type,
+          targetHpAfter: target.hp, targetMaxHp: target.maxHp
+        })
       }
     } else if (effect.type === 'extraStrikeSelf' && targets.length > 0) {
       singleAttack(pickTarget(targets), { multiplier: effect.multiplier, abilityName: actor.ability.name })
@@ -285,7 +305,7 @@ function resolveActorTurn(actor, combatants, log, randomFn) {
       singleAttack(pickTarget(targets), { multiplier: activeEffect.multiplier, abilityName: actor.ability.name })
       st.defMod = activeEffect.selfDefMultiplier
       st.defModTurns = activeEffect.duration
-      log.push({ type: 'action', text: `${actor.name}'s reckless swing leaves their own defense lowered!` })
+      log.push({ type: 'action', text: `${actor.name}'s reckless swing leaves their own defense lowered!`, kind: 'debuff', fx: 'debuff', actorId: actor.cardId })
       break
     }
 
@@ -294,7 +314,7 @@ function resolveActorTurn(actor, combatants, log, randomFn) {
       const { hit } = singleAttack(target, { abilityName: actor.ability.name })
       if (hit && target.hp > 0 && randomFn() < activeEffect.chance) {
         target.status.stunnedTurns = Math.max(target.status.stunnedTurns, activeEffect.duration)
-        log.push({ type: 'action', text: `${target.name} is stunned and will miss their next turn!` })
+        log.push({ type: 'action', text: `${target.name} is stunned and will miss their next turn!`, kind: 'stun', fx: 'stun', actorId: actor.cardId, targetId: target.cardId })
       }
       break
     }
@@ -305,7 +325,7 @@ function resolveActorTurn(actor, combatants, log, randomFn) {
       if (hit && target.hp > 0) {
         target.status.dotDamage = Math.max(1, Math.round(actor.atk * activeEffect.dotMultiplier))
         target.status.dotTurns = activeEffect.duration
-        log.push({ type: 'action', text: `${target.name} is bleeding!` })
+        log.push({ type: 'action', text: `${target.name} is bleeding!`, kind: 'poison', fx: 'poison', actorId: actor.cardId, targetId: target.cardId })
       }
       break
     }
@@ -316,7 +336,7 @@ function resolveActorTurn(actor, combatants, log, randomFn) {
       if (hit && target.hp > 0) {
         target.status.atkMod = activeEffect.atkMultiplier
         target.status.atkModTurns = activeEffect.duration
-        log.push({ type: 'action', text: `${target.name} is pinned down, their attacks weakened!` })
+        log.push({ type: 'action', text: `${target.name} is pinned down, their attacks weakened!`, kind: 'debuff', fx: 'debuff', actorId: actor.cardId, targetId: target.cardId })
       }
       break
     }
@@ -334,16 +354,18 @@ function resolveActorTurn(actor, combatants, log, randomFn) {
     }
 
     case 'aoe': {
-      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, striking every enemy!` })
-      livingCombatants(combatants, opposingSide).forEach((target) => {
+      const aoeTargets = livingCombatants(combatants, opposingSide)
+      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, striking every enemy!`, kind: 'cast', fx: 'shockwave', actorId: actor.cardId, targetIds: aoeTargets.map((t) => t.cardId), effectType: activeEffect.type })
+      aoeTargets.forEach((target) => {
         singleAttack(target, { multiplier: activeEffect.multiplier })
       })
       break
     }
 
     case 'aoeBurn': {
-      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, engulfing every enemy in flame!` })
-      livingCombatants(combatants, opposingSide).forEach((target) => {
+      const aoeTargets = livingCombatants(combatants, opposingSide)
+      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, engulfing every enemy in flame!`, kind: 'cast', fx: 'fire', actorId: actor.cardId, targetIds: aoeTargets.map((t) => t.cardId), effectType: activeEffect.type })
+      aoeTargets.forEach((target) => {
         const { hit } = singleAttack(target, { multiplier: activeEffect.multiplier })
         if (hit && target.hp > 0) {
           target.status.dotDamage = Math.max(1, Math.round(actor.atk * activeEffect.dotMultiplier))
@@ -354,12 +376,13 @@ function resolveActorTurn(actor, combatants, log, randomFn) {
     }
 
     case 'aoeStun': {
-      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, striking every enemy!` })
-      livingCombatants(combatants, opposingSide).forEach((target) => {
+      const aoeTargets = livingCombatants(combatants, opposingSide)
+      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, striking every enemy!`, kind: 'cast', fx: 'shockwave', actorId: actor.cardId, targetIds: aoeTargets.map((t) => t.cardId), effectType: activeEffect.type })
+      aoeTargets.forEach((target) => {
         const { hit } = singleAttack(target, { multiplier: activeEffect.multiplier })
         if (hit && target.hp > 0 && randomFn() < activeEffect.stunChance) {
           target.status.stunnedTurns = Math.max(target.status.stunnedTurns, activeEffect.duration)
-          log.push({ type: 'action', text: `${target.name} is stunned!` })
+          log.push({ type: 'action', text: `${target.name} is stunned!`, kind: 'stun', fx: 'stun', actorId: actor.cardId, targetId: target.cardId })
         }
       })
       break
@@ -369,14 +392,14 @@ function resolveActorTurn(actor, combatants, log, randomFn) {
     case 'evasionSelf':
       st.evasionChance = activeEffect.chance
       st.evasionTurns = activeEffect.duration
-      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, poised to dodge!` })
+      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, poised to dodge!`, kind: 'buff', fx: 'buff', actorId: actor.cardId, effectType: activeEffect.type })
       singleAttack(pickTarget(targets))
       break
 
     case 'selfDefBuff':
       st.defMod = activeEffect.multiplier
       st.defModTurns = activeEffect.duration
-      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, bracing defensively!` })
+      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, bracing defensively!`, kind: 'buff', fx: 'buff', actorId: actor.cardId, effectType: activeEffect.type })
       singleAttack(pickTarget(targets))
       break
 
@@ -384,7 +407,7 @@ function resolveActorTurn(actor, combatants, log, randomFn) {
       const target = pickTarget(targets)
       target.status.missChance = activeEffect.chance
       target.status.missTurns = activeEffect.duration
-      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name} on ${target.name}, throwing off their aim!` })
+      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name} on ${target.name}, throwing off their aim!`, kind: 'debuff', fx: 'debuff', actorId: actor.cardId, targetId: target.cardId, effectType: activeEffect.type })
       singleAttack(target)
       break
     }
@@ -393,32 +416,36 @@ function resolveActorTurn(actor, combatants, log, randomFn) {
       const target = pickTarget(targets)
       target.status.defMod = Math.min(target.status.defMod, 1 - activeEffect.reduction)
       target.status.defModTurns = Math.max(target.status.defModTurns, activeEffect.duration)
-      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, exposing ${target.name}'s weak points!` })
+      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, exposing ${target.name}'s weak points!`, kind: 'debuff', fx: 'debuff', actorId: actor.cardId, targetId: target.cardId, effectType: activeEffect.type })
       singleAttack(target)
       break
     }
 
-    case 'partyAtkBuff':
-      livingCombatants(combatants, alliedSide).forEach((ally) => {
+    case 'partyAtkBuff': {
+      const allies = livingCombatants(combatants, alliedSide)
+      allies.forEach((ally) => {
         ally.status.atkMod = activeEffect.multiplier
         ally.status.atkModTurns = activeEffect.duration
       })
-      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, rallying the whole party's attack!` })
+      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, rallying the whole party's attack!`, kind: 'buff', fx: 'buff', actorId: actor.cardId, targetIds: allies.map((a) => a.cardId), effectType: activeEffect.type })
       singleAttack(pickTarget(targets))
       break
+    }
 
-    case 'partyEnemyAtkDebuff':
-      livingCombatants(combatants, opposingSide).forEach((enemy) => {
+    case 'partyEnemyAtkDebuff': {
+      const enemies = livingCombatants(combatants, opposingSide)
+      enemies.forEach((enemy) => {
         enemy.status.atkMod = activeEffect.multiplier
         enemy.status.atkModTurns = activeEffect.duration
       })
-      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, intimidating every enemy!` })
+      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, intimidating every enemy!`, kind: 'debuff', fx: 'debuff', actorId: actor.cardId, targetIds: enemies.map((e) => e.cardId), effectType: activeEffect.type })
       singleAttack(pickTarget(targets))
       break
+    }
 
     case 'tauntSelf':
       st.tauntTurns = activeEffect.duration
-      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, daring every enemy to target them!` })
+      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, daring every enemy to target them!`, kind: 'buff', fx: 'buff', actorId: actor.cardId, effectType: activeEffect.type })
       singleAttack(pickTarget(targets))
       break
 
@@ -427,7 +454,7 @@ function resolveActorTurn(actor, combatants, log, randomFn) {
       const beneficiary = allies.length > 0 ? pickRandom(allies, randomFn) : actor
       beneficiary.status.atkMod = activeEffect.multiplier
       beneficiary.status.atkModTurns = activeEffect.duration
-      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, empowering ${beneficiary.name}!` })
+      log.push({ type: 'action', text: `${actor.name} uses ${actor.ability.name}, empowering ${beneficiary.name}!`, kind: 'buff', fx: 'buff', actorId: actor.cardId, targetId: beneficiary.cardId, effectType: activeEffect.type })
       singleAttack(pickTarget(targets))
       break
     }
