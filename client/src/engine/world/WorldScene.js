@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { WORLD_BOUNDS } from './zones'
+import { NPC_VILLAGERS } from '../../data/npcVillagers'
 
 // Trees and buildings are real flat-illustrated art on camera-facing
 // billboards (see public/world/*.png) rather than procedural cone/box
@@ -23,11 +24,11 @@ const HOUSE_TEXTURES = {
 // Decorative townsfolk — generic flat-illustrated villagers (not the
 // dateable cast, who already have their own portraits elsewhere) just to
 // make the square feel lived-in instead of empty.
-const NPC_TEXTURES = [
-  { url: '/world/npc_blue.png', aspect: 160 / 380 },
-  { url: '/world/npc_apron.png', aspect: 160 / 380 },
-  { url: '/world/npc_scarf.png', aspect: 160 / 380 }
-]
+const NPC_TEXTURES = {
+  blue: { url: '/world/npc_blue.png', aspect: 160 / 380 },
+  apron: { url: '/world/npc_apron.png', aspect: 160 / 380 },
+  scarf: { url: '/world/npc_scarf.png', aspect: 160 / 380 }
+}
 
 const textureCache = new Map()
 function loadTexture(url, repeat) {
@@ -157,18 +158,14 @@ export function buildWorldScene(zones) {
     billboards.push({ group })
   }
 
-  // Decorative townsfolk: a handful of generic villagers standing around
-  // the square so it doesn't feel abandoned. Purely cosmetic — no
-  // dialogue, no proximity prompt — that's what the zone beacons below
-  // are for. `bob: true` gets a slow idle sway in World.jsx's tick loop
-  // so they read as alive rather than propped-up cutouts.
-  const npcSpecs = [
-    { x: 6, z: -3, kind: 0 },
-    { x: -9, z: 5, kind: 1 },
-    { x: 9, z: 11, kind: 2 },
-    { x: -20, z: -15, kind: 1 }
-  ]
-  for (const n of npcSpecs) {
+  // Townsfolk: generic villagers standing around the square so it doesn't
+  // feel abandoned — and each one is a real "Talk" interaction backed by
+  // an AI call (see data/npcVillagers.js + World.jsx), not just a static
+  // prop. Position data lives in npcVillagers.js so the render placement
+  // here and the proximity/interaction check in World.jsx can never drift
+  // apart. `bob: true` gets a slow idle sway in World.jsx's tick loop so
+  // they read as alive rather than propped-up cutouts.
+  for (const n of NPC_VILLAGERS) {
     const group = makeBillboard(NPC_TEXTURES[n.kind], 1.8)
     group.position.set(n.x, 0, n.z)
     scene.add(group)
