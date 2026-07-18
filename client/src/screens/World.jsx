@@ -42,7 +42,7 @@ export default function World({ companionId, onEnterZone, onOpenMenu, hud }) {
   useEffect(() => {
     const mount = mountRef.current
     const zones = allZones(companionId)
-    const { scene, beacons } = buildWorldScene(zones)
+    const { scene, beacons, billboards } = buildWorldScene(zones)
 
     const camera = new THREE.PerspectiveCamera(70, mount.clientWidth / mount.clientHeight, 0.1, 300)
     const renderer = new THREE.WebGLRenderer({ antialias: true })
@@ -137,6 +137,18 @@ export default function World({ companionId, onEnterZone, onOpenMenu, hud }) {
       for (const b of beacons) {
         const isNear = within && b.id === within.id
         b.beam.material.opacity = isNear ? 0.85 : 0.45 + Math.sin(t + b.group.position.x) * 0.1
+      }
+
+      // Face every tree/building billboard toward the camera around the
+      // vertical axis only, so they stay upright (see WorldScene.js) —
+      // full quaternion-copy billboarding would tilt them as the player
+      // looks up/down, which reads as wrong for things planted in the
+      // ground.
+      for (const bb of billboards) {
+        bb.group.rotation.y = Math.atan2(
+          camera.position.x - bb.group.position.x,
+          camera.position.z - bb.group.position.z
+        )
       }
 
       renderer.render(scene, camera)

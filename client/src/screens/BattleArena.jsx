@@ -4,6 +4,7 @@ import { makeCombatant, generateEncounter, runBattle, battleRewards } from '../d
 import { TACTICS, TACTIC_ORDER, applyTactic } from '../data/tactics'
 import { TYPE_EMOJI, TYPE_COLORS, TYPE_LABELS } from '../data/types'
 import { playSfx } from '../engine/audioManager'
+import BattleStage3D from './BattleStage3D'
 
 // The real battle screen — turn-by-turn stat resolution, not the soft-
 // scripted opening mission. Builds the player's chosen party, rolls a wild
@@ -26,7 +27,8 @@ export default function BattleArena({ partyIndices, collection, onFinish, onExit
 
   const [enemyCombatants] = useState(() => generateEncounter(avgLevel))
   const [tacticId, setTacticId] = useState('balanced')
-  const [outcome, setOutcome] = useState(null) // { log, result, rewards }
+  const [outcome, setOutcome] = useState(null) // { log, result, rewards, combatants }
+  const [playbackDone, setPlaybackDone] = useState(false)
 
   function fight() {
     // runBattle mutates the combatant objects it's given, so hand it fresh
@@ -37,11 +39,12 @@ export default function BattleArena({ partyIndices, collection, onFinish, onExit
       applyTactic(makeCombatant(resolveCard(entry), entry.level || 1, 'player'), tacticId)
     )
     const freshEnemy = enemyCombatants.map((e) => ({ ...e }))
-    const { log, result } = runBattle(freshPlayer, freshEnemy)
+    const { log, result, combatants } = runBattle(freshPlayer, freshEnemy)
     const tactic = TACTICS[tacticId] || TACTICS.balanced
     log.unshift({ type: 'action', text: `Your party enters the fight in a ${tactic.label} stance (${tactic.desc})` })
     const rewards = battleRewards(freshEnemy, result)
-    setOutcome({ log, result, rewards })
+    setOutcome({ log, result, rewards, combatants })
+    setPlaybackDone(false)
     if (result === 'win') playSfx('victory')
   }
 
@@ -49,6 +52,18 @@ export default function BattleArena({ partyIndices, collection, onFinish, onExit
     const xpGains = {}
     playerEntries.forEach(({ index }) => { xpGains[index] = outcome.rewards.xpPerCard })
     onFinish({ goldGain: outcome.rewards.gold, xpGains, result: outcome.result, tactic: tacticId })
+  }
+
+  if (outcome && !playbackDone) {
+    return (
+      <div className="battle-screen battle-screen-3d">
+        <BattleStage3D
+          combatants={outcome.combatants}
+          steps={outcome.log}
+          onDone={() => setPlaybackDone(true)}
+        />
+      </div>
+    )
   }
 
   return (
@@ -109,7 +124,7 @@ export default function BattleArena({ partyIndices, collection, onFinish, onExit
 
       {!outcome && <button onClick={fight}>Fight!</button>}
 
-      {outcome && (
+      {outcome && playbackDone && (
         <>
           <div className="battle-log">
             {outcome.log.map((entry, i) =>
