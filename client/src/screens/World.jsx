@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from 'react'
 import * as THREE from 'three'
 import { buildWorldScene } from '../engine/world/WorldScene'
 import { allZones, WORLD_BOUNDS } from '../engine/world/zones'
+import { NPC_VILLAGERS, npcContextMessage } from '../data/npcVillagers'
 
 const EYE_HEIGHT = 1.7
 const MOVE_SPEED = 9 // units/sec
 const LOOK_SENSITIVITY = 0.0032
 const JOYSTICK_RADIUS = 44
+const NPC_PROXIMITY_SLACK = 1.0
 
 // First-person explorable hub: replaces the old flat button-grid menu.
 // Walking up to a landmark's glowing beacon surfaces a prompt; committing
@@ -21,9 +23,11 @@ const JOYSTICK_RADIUS = 44
 // use it at all. Drag-to-look plus a thumb joystick works identically
 // everywhere, which matters a lot more than desktop purism given this is
 // primarily played on a phone.
-export default function World({ companionId, onEnterZone, onOpenMenu, hud }) {
+export default function World({ companionId, companionName, gold, battlesWon, onEnterZone, onOpenMenu, hud }) {
   const mountRef = useRef(null)
   const [nearZone, setNearZone] = useState(null)
+  const [nearNpc, setNearNpc] = useState(null)
+  const [npcRemark, setNpcRemark] = useState(null) // { npcId, name, text, loading, error }
   const [joystick, setJoystick] = useState(null) // { originX, originY, dx, dy } while a touch/drag is active on the stick
 
   // Mutable per-frame state that doesn't need to trigger React re-renders.
@@ -36,8 +40,56 @@ export default function World({ companionId, onEnterZone, onOpenMenu, hud }) {
     lookDrag: null // { pointerId, lastX, lastY } while a look-drag is active
   })
   const nearZoneRef = useRef(null)
+  const nearNpcRef = useRef(null)
   const onEnterZoneRef = useRef(onEnterZone)
   onEnterZoneRef.current = onEnterZone
+  // Kept current every render (not just at effect-setup time) so the tick
+  // loop's closure and talkToNpc always see the latest game state without
+  // needing companionId-style dependency-array rebuilds of the whole scene.
+  const companionNameRef = useRef(companionName)
+  companionNameRef.current = companionName
+  const goldRef = useRef(gold)
+  goldRef.current = gold
+  const battlesWonRef = useRef(battlesWon)
+  battlesWonRef.current = battlesWon
+
+  // Walking up to a villager and hitting "Talk" fires ONE real AI call
+  // (same /api/chat backend the companions use) and shows whatever single
+  // line comes back — see data/npcVillagers.js for why this is "AI" and
+  // not a canned flavor-text pool.
+  async function talkToNpc(npc) {
+    setNpcRemark({ npcId: npc.id, name: npc.name, text: '', loading: true, error: null })
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          systemPrompt: npc.systemPrompt,
+          history: [{
+            role: 'user',
+            content: npcContextMessage({
+              companionName: companionNameRef.current,
+              gold: goldRef.current,
+              battlesWon: battlesWonRef.current
+            })
+          }]
+        })
+      })
+      if (!res.ok) throw new Error(`Server responded ${res.status}`)
+      const data = await res.json()
+      setNpcRemark({ npcId: npc.id, name: npc.name, text: data.reply, loading: false, error: null })
+    } catch (e) {
+      setNpcRemark({ npcId: npc.id, name: npc.name, text: '', loading: false, error: "Couldn't reach them just now." })
+    }
+  }
+
+  // Auto-dismiss the speech bubble a few seconds after a reply lands so it
+  // doesn't linger on screen forever.
+  useEffect(() => {
+    if (!npcRemark || npcRemark.loading) return
+    const timer = setTimeout(() => setNpcRemark(null), 7000)
+    return () => clearTimeout(timer)
+  }, [npcRemark])
 
   useEffect(() => {
     const mount = mountRef.current
@@ -139,6 +191,21 @@ export default function World({ companionId, onEnterZone, onOpenMenu, hud }) {
         b.beam.material.opacity = isNear ? 0.85 : 0.45 + Math.sin(t + b.group.position.x) * 0.1
       }
 
+      // Same proximity pattern as the zone beacons above, but for the
+      // talkative villagers — a separate check because getting near an
+      // NPC should surface a "Talk" prompt, not navigate away like a zone.
+      let closestNpc = null
+      let closestNpcDist = Infinity
+      for (const n of NPC_VILLAGERS) {
+        const d = Math.hypot(st.pos.x - n.x, st.pos.z - n.z)
+        if (d < closestNpcDist) { closestNpcDist = d; closestNpc = n }
+      }
+      const withinNpc = closestNpc && closestNpcDist <= closestNpc.radius + NPC_PROXIMITY_SLACK ? closestNpc : null
+      if ((withinNpc?.id || null) !== nearNpcRef.current) {
+        nearNpcRef.current = withinNpc?.id || null
+        setNearNpc(withinNpc)
+      }
+
       // Face every tree/building billboard toward the camera around the
       // vertical axis only, so they stay upright (see WorldScene.js) —
       // full quaternion-copy billboarding would tilt them as the player
@@ -212,6 +279,22 @@ export default function World({ companionId, onEnterZone, onOpenMenu, hud }) {
         <div className="world-prompt">
           <span>{nearZone.label}</span>
           <button onClick={() => onEnterZoneRef.current(nearZone.action, nearZone)}>Enter →</button>
+        </div>
+      )}
+
+      {nearNpc && (!npcRemark || npcRemark.npcId !== nearNpc.id) && (
+        <div className="world-prompt world-prompt-npc">
+          <span>{nearNpc.name}</span>
+          <button onClick={() => talkToNpc(nearNpc)}>Talk</button>
+        </div>
+      )}
+
+      {npcRemark && (
+        <div className="world-npc-bubble">
+          <span className="world-npc-bubble-name">{npcRemark.name}</span>
+          <p className="world-npc-bubble-text">
+            {npcRemark.loading ? '…' : npcRemark.error || `"${npcRemark.text}"`}
+          </p>
         </div>
       )}
 
